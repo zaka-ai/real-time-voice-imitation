@@ -14,6 +14,7 @@ from scipy.io import wavfile
 from datetime import datetime
 from urllib.parse import urlparse
 from mega import Mega
+from google.colab.output import eval_js
 
 os.system("python models.py")
 
@@ -540,7 +541,7 @@ def change_audio_mode(vc_audio_mode):
             gr.Textbox.update(visible=False),
             gr.Dropdown.update(visible=False)
         )
-    elif vc_audio_mode == "Upload audio":
+    if vc_audio_mode == "Upload audio":
         return (
             # Input & Upload
             gr.Textbox.update(visible=False),
@@ -620,38 +621,56 @@ def change_audio_mode(vc_audio_mode):
             # TTS
             gr.Textbox.update(visible=True),
             gr.Dropdown.update(visible=True)
-        )
-        
+        ) 
+def open_ngrok_link():
+    try:
+        with open("/content/drive/MyDrive/vcclient/ngrok_url.txt", "r") as f:
+            ngrok_url = f.read().strip()
+        return ngrok_url
+    except FileNotFoundError:
+        return "Ngrok URL not found. Make sure the server is running."
+
+
+def get_and_open_link():
+    link = open_ngrok_link()
+    if link.startswith("http"):
+        # Return the link in Markdown format to make it clickable
+        return f"[Click here to open Ngrok link]({link})"
+    else:
+        return "Invalid URL"
+
+
 with gr.Blocks() as app:
     gr.Markdown("# <center> Advanced RVC Inference\n")
     
-    with gr.Row():
-        sid = gr.Dropdown(
-            label="Weight",
-            choices=sorted(weights_model),
-        )
-        file_index = gr.Dropdown(
-            label="List of index file",
-            choices=sorted(weights_index),
-            interactive=True,
-        )
-        spk_item = gr.Slider(
-            minimum=0,
-            maximum=2333,
-            step=1,
-            label="Speaker ID",
-            value=0,
-            visible=False,
-            interactive=True,
-        )
-        refresh_model = gr.Button("Refresh model list", variant="primary")
-        clean_button = gr.Button("Clear Model from memory", variant="primary")
-        refresh_model.click(
-            fn=check_models, inputs=[], outputs=[sid, file_index]
-        )
-        clean_button.click(fn=clean, inputs=[], outputs=[sid, spk_item])
+    
     
     with gr.TabItem("Inference"):
+        with gr.Row():
+          sid = gr.Dropdown(
+              label="Weight",
+              choices=sorted(weights_model),
+          )
+          file_index = gr.Dropdown(
+              label="List of index file",
+              choices=sorted(weights_index),
+              interactive=True,
+          )
+          spk_item = gr.Slider(
+              minimum=0,
+              maximum=2333,
+              step=1,
+              label="Speaker ID",
+              value=0,
+              visible=False,
+              interactive=True,
+          )
+          refresh_model = gr.Button("Refresh model list", variant="primary")
+          clean_button = gr.Button("Clear Model from memory", variant="primary")
+          refresh_model.click(
+              fn=check_models, inputs=[], outputs=[sid, file_index]
+          )
+          clean_button.click(fn=clean, inputs=[], outputs=[sid, spk_item])
         selected_model = gr.Markdown(value="# <center> No model selected")
         
         with gr.Row():
@@ -840,5 +859,10 @@ with gr.Blocks() as app:
             ]
         )
         sid.change(fn=get_vc, inputs=[sid, protect0], outputs=[spk_item, protect0, file_index, selected_model])
+    with gr.TabItem("Ngrok Link"):
+      ngrok_button = gr.Button("Get Ngrok Link", variant="primary")
+      ngrok_link_output = gr.Markdown(label="Ngrok Link", visible=True)
+      ngrok_button.click(fn=get_and_open_link, inputs=[], outputs=[ngrok_link_output])
+
 
 app.queue(concurrency_count=1, max_size=50, api_open=config.api).launch(share=config.colab)
