@@ -222,7 +222,7 @@ def get_vc(sid, to_return_protect0):
             cpt = None
         return (
             gr.Slider.update(maximum=2333, visible=False),
-            gr.Slider.update(visible=True),
+            gr.Slider.update(visible=False),
             gr.Dropdown.update(choices=sorted(weights_index), value=""),
             gr.Markdown.update(value="# <center> No model selected")
         )
@@ -240,7 +240,7 @@ def get_vc(sid, to_return_protect0):
         }
     else:
         to_return_protect0 = {
-            "visible": True,
+            "visible": False,
             "value": to_return_protect0,
             "__type__": "update",
         }
@@ -278,7 +278,7 @@ def get_vc(sid, to_return_protect0):
             selected_index = gr.Dropdown.update(value=weights_index[index])
             break
     return (
-        gr.Slider.update(maximum=n_spk, visible=True),
+        gr.Slider.update(maximum=n_spk, visible=False),
         to_return_protect0,
         selected_index,
         gr.Markdown.update(
@@ -623,9 +623,8 @@ def change_audio_mode(vc_audio_mode):
         )
         
 with gr.Blocks() as app:
-    gr.Markdown(
-        "# <center> Advanced RVC Inference\n"
-    )
+    gr.Markdown("# <center> Advanced RVC Inference\n")
+    
     with gr.Row():
         sid = gr.Dropdown(
             label="Weight",
@@ -651,36 +650,43 @@ with gr.Blocks() as app:
             fn=check_models, inputs=[], outputs=[sid, file_index]
         )
         clean_button.click(fn=clean, inputs=[], outputs=[sid, spk_item])
+    
     with gr.TabItem("Inference"):
         selected_model = gr.Markdown(value="# <center> No model selected")
+        
         with gr.Row():
             with gr.Column():
                 vc_audio_mode = gr.Dropdown(label="Input voice", choices=["Input path", "Upload audio", "Youtube", "TTS Audio"], allow_custom_value=False, value="Upload audio")
+                
                 # Input
                 vc_input = gr.Textbox(label="Input audio path", visible=False)
+                
                 # Upload
                 vc_microphone_mode = gr.Checkbox(label="Use Microphone", value=False, visible=True, interactive=True)
                 vc_upload = gr.Audio(label="Upload audio file", source="upload", visible=True, interactive=True)
+                
                 # Youtube
                 vc_download_audio = gr.Dropdown(label="Provider", choices=["Youtube"], allow_custom_value=False, visible=False, value="Youtube", info="Select provider (Default: Youtube)")
                 vc_link = gr.Textbox(label="Youtube URL", visible=False, info="Example: https://www.youtube.com/watch?v=Nc0sB1Bmf-A", placeholder="https://www.youtube.com/watch?v=...")
                 vc_log_yt = gr.Textbox(label="Output Information", visible=False, interactive=False)
                 vc_download_button = gr.Button("Download Audio", variant="primary", visible=False)
                 vc_audio_preview = gr.Audio(label="Downloaded Audio Preview", visible=False)
+                
                 # TTS
                 tts_text = gr.Textbox(label="TTS text", info="Text to speech input", visible=False)
                 tts_voice = gr.Dropdown(label="Edge-tts speaker", choices=voices, visible=False, allow_custom_value=False, value="en-US-AnaNeural-Female")
+                
                 # Splitter
-                vc_split_model = gr.Dropdown(label="Splitter Model", choices=["hdemucs_mmi", "htdemucs", "htdemucs_ft", "mdx", "mdx_q", "mdx_extra_q"], allow_custom_value=False, visible=True, value="htdemucs", info="Select the splitter model (Default: htdemucs)")
-                vc_split_log = gr.Textbox(label="Output Information", visible=True, interactive=False)
-                vc_split_yt = gr.Button("Split Audio", variant="primary", visible=False)
-                vc_split = gr.Button("Split Audio", variant="primary", visible=True)
-                vc_vocal_preview = gr.Audio(label="Vocal Preview", interactive=False, visible=True)
-                vc_inst_preview = gr.Audio(label="Instrumental Preview", interactive=False, visible=True)
+                vc_split_model = gr.Dropdown(label="Splitter Model", choices=["hdemucs_mmi", "htdemucs", "htdemucs_ft", "mdx", "mdx_q", "mdx_extra_q"], allow_custom_value=False, visible=False, value="htdemucs", info="Select the splitter model (Default: htdemucs)")
+                vc_split_log = gr.Textbox(label="Output Information", visible=False, interactive=False)
+                vc_split = gr.Button("Split Audio", variant="primary", visible=False)
+                vc_vocal_preview = gr.Audio(label="Vocal Preview", interactive=False, visible=False)
+                vc_inst_preview = gr.Audio(label="Instrumental Preview", interactive=False, visible=False)
+            
             with gr.Column():
                 vc_transform0 = gr.Number(
                     label="Transpose", 
-                    info='Type "12" to change from male to female convertion or Type "-12" to change female to male convertion.',
+                    info='Type "12" to change from male to female conversion or "-12" for female to male conversion.',
                     value=0
                 )
                 f0method0 = gr.Radio(
@@ -696,46 +702,53 @@ with gr.Blocks() as app:
                     label="Retrieval feature ratio",
                     value=0.7,
                     interactive=True,
+                    visible=False
                 )
                 filter_radius0 = gr.Slider(
                     minimum=0,
                     maximum=7,
                     label="Apply Median Filtering",
-                    info="The value represents the filter radius and can reduce breathiness.",
+                    info="Reduces breathiness. Value represents the filter radius.",
                     value=3,
                     step=1,
                     interactive=True,
+                    visible=False
                 )
                 resample_sr0 = gr.Slider(
                     minimum=0,
                     maximum=48000,
                     label="Resample the output audio",
-                    info="Resample the output audio in post-processing to the final sample rate. Set to 0 for no resampling",
+                    info="Resample the output audio. Set to 0 for no resampling",
                     value=0,
                     step=1,
                     interactive=True,
+                    visible=False
                 )
                 rms_mix_rate0 = gr.Slider(
                     minimum=0,
                     maximum=1,
                     label="Volume Envelope",
-                    info="Use the volume envelope of the input to replace or mix with the volume envelope of the output. The closer the ratio is to 1, the more the output envelope is used",
+                    info="Mix input and output volume envelopes. Closer to 1 favors the output envelope.",
                     value=1,
                     interactive=True,
+                    visible=False
                 )
                 protect0 = gr.Slider(
                     minimum=0,
                     maximum=0.5,
                     label="Voice Protection",
-                    info="Protect voiceless consonants and breath sounds to prevent artifacts such as tearing in electronic music. Set to 0.5 to disable. Decrease the value to increase protection, but it may reduce indexing accuracy",
+                    info="Protect voiceless consonants to avoid artifacts. Set to 0.5 to disable.",
                     value=0.5,
                     step=0.01,
                     interactive=True,
+                    visible=False
                 )
                 f0_file0 = gr.File(
                     label="F0 curve file (Optional)",
-                    info="One pitch per line, Replace the default F0 and pitch modulation"
+                    info="Replace default F0 and pitch modulation.",
+                    visible=False
                 )
+            
             with gr.Column():
                 vc_log = gr.Textbox(label="Output Information", interactive=False)
                 vc_output = gr.Audio(label="Output Audio", interactive=False)
@@ -747,8 +760,8 @@ with gr.Blocks() as app:
                     value=1,
                     interactive=True,
                     step=1,
-                    info="Adjust vocal volume (Default: 1}",
-                    visible=True
+                    info="Adjust vocal volume (Default: 1)",
+                    visible=False
                 )
                 vc_inst_volume = gr.Slider(
                     minimum=0,
@@ -757,11 +770,13 @@ with gr.Blocks() as app:
                     value=1,
                     interactive=True,
                     step=1,
-                    info="Adjust instrument volume (Default: 1}",
-                    visible=True
+                    info="Adjust instrument volume (Default: 1)",
+                    visible=False
                 )
-                vc_combined_output = gr.Audio(label="Output Combined Audio", visible=True)
-                vc_combine =  gr.Button("Combine",variant="primary", visible=True)
+                vc_combined_output = gr.Audio(label="Output Combined Audio", visible=False)
+                vc_combine = gr.Button("Combine", variant="primary", visible=False)
+        
+        # Click events
         vc_convert.click(
             vc_single,
             [
@@ -784,16 +799,6 @@ with gr.Blocks() as app:
             ],
             [vc_log, vc_output],
         )
-        vc_download_button.click(
-            fn=download_audio, 
-            inputs=[vc_link, vc_download_audio], 
-            outputs=[vc_audio_preview, vc_log_yt]
-        )
-        vc_split_yt.click(
-            fn=cut_vocal_and_inst_yt, 
-            inputs=[vc_split_model], 
-            outputs=[vc_split_log, vc_vocal_preview, vc_inst_preview, vc_input]
-        )
         vc_split.click(
             fn=cut_vocal_and_inst, 
             inputs=[vc_split_model, vc_upload],
@@ -813,19 +818,15 @@ with gr.Blocks() as app:
             fn=change_audio_mode,
             inputs=[vc_audio_mode],
             outputs=[
-                # Input & Upload
                 vc_input,
                 vc_microphone_mode,
                 vc_upload,
-                # Youtube
                 vc_download_audio,
                 vc_link,
                 vc_log_yt,
                 vc_download_button,
-                # Splitter
                 vc_split_model,
                 vc_split_log,
-                vc_split_yt,
                 vc_split,
                 vc_audio_preview,
                 vc_vocal_preview,
@@ -834,111 +835,10 @@ with gr.Blocks() as app:
                 vc_inst_volume,
                 vc_combined_output,
                 vc_combine,
-                # TTS
                 tts_text,
                 tts_voice
             ]
         )
         sid.change(fn=get_vc, inputs=[sid, protect0], outputs=[spk_item, protect0, file_index, selected_model])
-    with gr.TabItem("Batch Inference"):
-        with gr.Row():
-            with gr.Column():
-                vc_input_bat = gr.Textbox(label="Input audio path (folder)", visible=True)
-                vc_output_bat = gr.Textbox(label="Output audio path (folder)", value="result/batch", visible=True)
-            with gr.Column():
-                vc_transform0_bat = gr.Number(
-                    label="Transpose", 
-                    info='Type "12" to change from male to female convertion or Type "-12" to change female to male convertion.',
-                    value=0
-                )
-                f0method0_bat = gr.Radio(
-                    label="Pitch extraction algorithm",
-                    info=f0method_info,
-                    choices=f0method_mode,
-                    value="pm",
-                    interactive=True,
-                )
-                index_rate0_bat = gr.Slider(
-                    minimum=0,
-                    maximum=1,
-                    label="Retrieval feature ratio",
-                    value=0.7,
-                    interactive=True,
-                )
-                filter_radius0_bat = gr.Slider(
-                    minimum=0,
-                    maximum=7,
-                    label="Apply Median Filtering",
-                    info="The value represents the filter radius and can reduce breathiness.",
-                    value=3,
-                    step=1,
-                    interactive=True,
-                )
-                resample_sr0_bat = gr.Slider(
-                    minimum=0,
-                    maximum=48000,
-                    label="Resample the output audio",
-                    info="Resample the output audio in post-processing to the final sample rate. Set to 0 for no resampling",
-                    value=0,
-                    step=1,
-                    interactive=True,
-                )
-                rms_mix_rate0_bat = gr.Slider(
-                    minimum=0,
-                    maximum=1,
-                    label="Volume Envelope",
-                    info="Use the volume envelope of the input to replace or mix with the volume envelope of the output. The closer the ratio is to 1, the more the output envelope is used",
-                    value=1,
-                    interactive=True,
-                )
-                protect0_bat = gr.Slider(
-                    minimum=0,
-                    maximum=0.5,
-                    label="Voice Protection",
-                    info="Protect voiceless consonants and breath sounds to prevent artifacts such as tearing in electronic music. Set to 0.5 to disable. Decrease the value to increase protection, but it may reduce indexing accuracy",
-                    value=0.5,
-                    step=0.01,
-                    interactive=True,
-                )
-            with gr.Column():
-                vc_log_bat = gr.Textbox(label="Output Information", interactive=False)
-                vc_convert_bat = gr.Button("Convert", variant="primary")
-        vc_convert_bat.click(
-            vc_multi,
-            [
-                spk_item,
-                vc_input_bat,
-                vc_output_bat,
-                vc_transform0_bat,
-                f0method0_bat,
-                file_index,
-                index_rate0_bat,
-                filter_radius0_bat,
-                resample_sr0_bat,
-                rms_mix_rate0_bat,
-                protect0_bat,
-            ],
-            [vc_log_bat],
-        )
-    with gr.TabItem("Model Downloader"):
-        gr.Markdown(
-            "# <center> Model Downloader (Beta)\n"+
-            "#### <center> To download multi link you have to put your link to the textbox and every link separated by space\n"+
-            "#### <center> Support Direct Link, Mega, Google Drive, etc"
-        )
-        with gr.Column():
-            md_text = gr.Textbox(label="URL")
-        with gr.Row():
-            md_download = gr.Button(label="Convert", variant="primary")
-            md_download_logs = gr.Textbox(label="Output information", interactive=False)
-            md_download.click(
-                fn=download_and_extract_models,
-                inputs=[md_text],
-                outputs=[md_download_logs]
-            )
-    with gr.TabItem("Settings"):
-        gr.Markdown(
-            "# <center> Settings\n"+
-            "#### <center> Work in progress"
-        )
-    app.queue(concurrency_count=1, max_size=50, api_open=config.api).launch(share=config.colab)
+
+app.queue(concurrency_count=1, max_size=50, api_open=config.api).launch(share=config.colab)
