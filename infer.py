@@ -15,6 +15,18 @@ from datetime import datetime
 from urllib.parse import urlparse
 from mega import Mega
 from google.colab.output import eval_js
+import argparse
+import os
+import sys
+import tempfile
+import gradio as gr
+import torch
+import torchaudio
+import traceback
+from TTS.demos.xtts_ft_demo.utils.gpt_train import train_gpt
+from TTS.tts.configs.xtts_config import XttsConfig
+from TTS.tts.models.xtts import Xtts
+
 
 os.system("python models.py")
 
@@ -640,12 +652,43 @@ def get_and_open_link():
         return "Invalid URL"
 
 
+# Inference function for Gradio
+def clone_voice(text, audio_file):
+    # Load model configuration and checkpoint
+    config_path = "/content/drive/MyDrive/XTTS_ft_colab/config.json"
+    checkpoint_dir = "/content/drive/MyDrive/XTTS_ft_colab/"
+
+    config = XttsConfig()
+    config.load_json(config_path)
+    model = Xtts.init_from_config(config)
+    model.load_checkpoint(config, checkpoint_dir=checkpoint_dir, use_deepspeed=False)
+    model.cuda()
+    # Process the uploaded audio to extract speaker latent representation
+    gpt_cond_latent, speaker_embedding = model.get_conditioning_latents(audio_path=[audio_file])
+
+    # Perform inference to generate the cloned voice output
+    output = model.inference(
+        text,
+        "ar",  # Arabic language code
+        gpt_cond_latent,
+        speaker_embedding,
+        temperature=0.7,  # Adjust temperature as needed
+    )
+
+    # Save the generated audio
+    generated_audio_path = "generated_voice.wav"
+    torchaudio.save(generated_audio_path, torch.tensor(output["wav"]).unsqueeze(0), 24000)
+
+    return generated_audio_path
+
+
+
 with gr.Blocks() as app:
     gr.Markdown("# <center> Advanced RVC Inference\n")
     
     
     
-    with gr.TabItem("Inference"):
+    with gr.TabItem("RVC inference"):
         with gr.Row():
           sid = gr.Dropdown(
               label="Weight",
@@ -859,10 +902,30 @@ with gr.Blocks() as app:
             ]
         )
         sid.change(fn=get_vc, inputs=[sid, protect0], outputs=[spk_item, protect0, file_index, selected_model])
-    with gr.TabItem("Ngrok Link"):
+    with gr.TabItem("real-time RVC"):
       ngrok_button = gr.Button("Get Ngrok Link", variant="primary")
       ngrok_link_output = gr.Markdown(label="Ngrok Link", visible=True)
       ngrok_button.click(fn=get_and_open_link, inputs=[], outputs=[ngrok_link_output])
+    with gr.TabItem("Text to speech voice cloning"):
+        gr.Markdown("# <center> Coqui XTTS Voice Cloning\n")
+        
+        # Input fields
+        text_input = gr.Textbox(label="Text to convert to speech", placeholder="Enter the text here")
+        audio_upload = gr.Audio(label="Upload an audio file", source="upload", type="filepath")
+        
+        # Output field
+        output_audio = gr.Audio(label="Generated Cloned Voice")
+        
+        # Button to trigger inference
+        submit_button = gr.Button("Generate Cloned Voice")
+        
+        # Click event to call clone_voice function
+        submit_button.click(
+            fn=clone_voice,
+            inputs=[text_input, audio_upload],
+            outputs=[output_audio]
+        )
 
 
-app.queue(concurrency_count=1, max_size=50, api_open=config.api).launch(share=config.colab)
+
+app.queue(concurrency_count=1, max_size=50).launch(share=True)
