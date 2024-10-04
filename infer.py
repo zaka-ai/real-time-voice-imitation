@@ -655,8 +655,8 @@ def get_and_open_link():
 # Inference function for Gradio
 def clone_voice(text, audio_file):
     # Load model configuration and checkpoint
-    config_path = "/content/drive/MyDrive/XTTS_ft_colab/config.json"
-    checkpoint_dir = "/content/drive/MyDrive/XTTS_ft_colab/"
+    config_path = "/content/drive/MyDrive/coqui_XTTSv2/XTTS_ft_colab/config.json"
+    checkpoint_dir = "/content/drive/MyDrive/coqui_XTTSv2/XTTS_ft_colab/"
 
     config = XttsConfig()
     config.load_json(config_path)
