@@ -2,7 +2,7 @@
 
 # Real-time Voice Cloning
 
-[![Colab](https://img.shields.io/badge/Colab-Advanced%20RVC%20Inference-blue?style=for-the-badge&logo=googlecolab)](https://drive.google.com/file/d/1ac2mTL1rRbYAZy8lOEviNW108jToKyGL/view?usp=sharing)
+[![Colab](https://img.shields.io/badge/Colab-%20RVC%20Interface-blue?style=for-the-badge&logo=googlecolab)](https://drive.google.com/file/d/1ac2mTL1rRbYAZy8lOEviNW108jToKyGL/view?usp=sharing)
 </div>
 
 ### Overview
