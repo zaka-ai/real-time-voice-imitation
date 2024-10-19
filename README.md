@@ -2,7 +2,7 @@
 
 # Real-time Voice Cloning
 
-[![Colab](https://img.shields.io/badge/Colab-%20RVC%20Interface-blue?style=for-the-badge&logo=googlecolab)](https://drive.google.com/file/d/1ac2mTL1rRbYAZy8lOEviNW108jToKyGL/view?usp=sharing)
+[![Colab](https://img.shields.io/badge/Colab-Interface-blue?style=for-the-badge&logo=googlecolab)](https://drive.google.com/file/d/1ac2mTL1rRbYAZy8lOEviNW108jToKyGL/view?usp=sharing)
 </div>
 
 ### Overview
@@ -33,11 +33,11 @@ This project features an intuitive interface that harnesses the power of two adv
 ### Colabs Used <br />
 
 For RVC training:
-[![Colab](https://img.shields.io/badge/Colab-Advanced%20RVC%20Inference-blue?style=for-the-badge&logo=googlecolab)](https://colab.research.google.com/drive/1o7qkdxe4vfeoqf8d166RSzfvLwkl5YQ-?usp=sharing)
+[![Colab](https://img.shields.io/badge/Colab-RVC-Training-blue?style=for-the-badge&logo=googlecolab)](https://colab.research.google.com/drive/1o7qkdxe4vfeoqf8d166RSzfvLwkl5YQ-?usp=sharing)
 
 For Coqui TTS training:
-[![Colab](https://img.shields.io/badge/Colab-Advanced%20RVC%20Inference-blue?style=for-the-badge&logo=googlecolab)](https://drive.google.com/file/d/1ofUzeZYO7AwsEG2tt8g34gco9XnuFdbS/view?usp=sharing)
+[![Colab](https://img.shields.io/badge/Colab-coquiXTTS-Training-blue?style=for-the-badge&logo=googlecolab)](https://drive.google.com/file/d/1ofUzeZYO7AwsEG2tt8g34gco9XnuFdbS/view?usp=sharing)
 
 ### Technical Blog <br />
-[![Colab](https://img.shields.io/badge/Colab-Advanced%20RVC%20Inference-blue?style=for-the-badge&logo=googlecolab)](https://docs.google.com/document/d/1tBTDE46vb-kL2-4iJqQGDfg1ua-kAUrvk5hc4eaNkIY/edit?usp=sharing)
+[![Colab](https://img.shields.io/badge/Blog-green?style=for-the-badge&logo=googlecolab)](https://docs.google.com/document/d/1tBTDE46vb-kL2-4iJqQGDfg1ua-kAUrvk5hc4eaNkIY/edit?usp=sharing)
 </div>
