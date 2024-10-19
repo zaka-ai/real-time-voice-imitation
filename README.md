@@ -33,10 +33,10 @@ This project features an intuitive interface that harnesses the power of two adv
 ### Colabs Used <br />
 
 For RVC Training:
-[![Colab](https://img.shields.io/badge/Colab-RVCTraining-blue?style=for-the-badge&logo=googlecolab)](https://colab.research.google.com/drive/1o7qkdxe4vfeoqf8d166RSzfvLwkl5YQ-?usp=sharing)
+[![Colab](https://img.shields.io/badge/Colab-blue?style=for-the-badge&logo=googlecolab)](https://colab.research.google.com/drive/1o7qkdxe4vfeoqf8d166RSzfvLwkl5YQ-?usp=sharing)
 
 For Coqui TTS Training:
-[![Colab](https://img.shields.io/badge/Colab-coquiXTTSTraining-blue?style=for-the-badge&logo=googlecolab)](https://drive.google.com/file/d/1ofUzeZYO7AwsEG2tt8g34gco9XnuFdbS/view?usp=sharing)
+[![Colab](https://img.shields.io/badge/Colab-blue?style=for-the-badge&logo=googlecolab)](https://drive.google.com/file/d/1ofUzeZYO7AwsEG2tt8g34gco9XnuFdbS/view?usp=sharing)
 
 ### Technical Blog <br />
 [![Blog](https://img.shields.io/badge/Blog-green?style=for-the-badge)](https://docs.google.com/document/d/1tBTDE46vb-kL2-4iJqQGDfg1ua-kAUrvk5hc4eaNkIY/edit?usp=sharing)
