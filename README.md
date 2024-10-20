@@ -50,7 +50,7 @@ This project features an intuitive interface that harnesses the power of two adv
 ---
 
 ### 📖 Technical Blog 
-[![Blog](https://img.shields.io/badge/Blog-green?style=for-the-badge)](https://docs.google.com/document/d/1aCjrH3DTNgMvbH1sArSgeRVZWoyFeB3J/edit?usp=drive_link&ouid=108610533114917190006&rtpof=true&sd=true)
+[![Blog](https://img.shields.io/badge/Blog-green?style=for-the-badge)](https://docs.google.com/document/d/1OLf4UsaoB2dfH0cLnjChEsZiBwxHHvfN/edit?usp=sharing&ouid=108610533114917190006&rtpof=true&sd=true)
 
 ---
 
