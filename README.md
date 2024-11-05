@@ -50,7 +50,7 @@ This project features an intuitive interface that harnesses the power of two adv
 ---
 
 ### 📖 Technical Blog 
-[![Blog](https://img.shields.io/badge/Blog-green?style=for-the-badge)](https://docs.google.com/document/d/1jz3gPZ0C8kNpv-ED_YQW7JnSlXU_TguR/edit?usp=sharing&ouid=108610533114917190006&rtpof=true&sd=true)
+[![Blog](https://img.shields.io/badge/Blog-green?style=for-the-badge)](https://zaka.ai/real-time-voice-imitation-clone-any-voice-with-aistep-by-step-guide/)
 
 ---
 
