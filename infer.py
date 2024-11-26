@@ -14,7 +14,6 @@ from scipy.io import wavfile
 from datetime import datetime
 from urllib.parse import urlparse
 from mega import Mega
-from google.colab.output import eval_js
 import argparse
 import os
 import sys
@@ -23,10 +22,6 @@ import gradio as gr
 import torch
 import torchaudio
 import traceback
-from TTS.demos.xtts_ft_demo.utils.gpt_train import train_gpt
-from TTS.tts.configs.xtts_config import XttsConfig
-from TTS.tts.models.xtts import Xtts
-
 
 os.system("python models.py")
 
@@ -81,7 +76,9 @@ weights_index = []
 for _, _, model_files in os.walk(weight_root):
     for file in model_files:
         if file.endswith(".pth"):
-            weights_model.append(file)
+                # Remove the '.pth' extension, replace '_' with ' ', and capitalize each word
+            weights_model.append(os.path.splitext(file)[0].replace('_', ' ').title())
+                
 for _, _, index_files in os.walk(index_root):
     for file in index_files:
         if file.endswith('.index') and "trained" not in file:
@@ -90,16 +87,20 @@ for _, _, index_files in os.walk(index_root):
 def check_models():
     weights_model = []
     weights_index = []
+    
     for _, _, model_files in os.walk(weight_root):
         for file in model_files:
             if file.endswith(".pth"):
-                weights_model.append(file)
+                # Remove the '.pth' extension, replace '_' with ' ', and capitalize each word
+                weights_model.append(os.path.splitext(file)[0].replace('_', ' ').title())
+                
     for _, _, index_files in os.walk(index_root):
         for file in index_files:
             if file.endswith('.index') and "trained" not in file:
                 weights_index.append(os.path.join(index_root, file))
+                
     return (
-        gr.Dropdown.update(choices=sorted(weights_model), value=weights_model[0]),
+        gr.Dropdown.update(choices=sorted(weights_model), value=weights_model[0] if weights_model else None),
         gr.Dropdown.update(choices=sorted(weights_index))
     )
 
@@ -115,8 +116,6 @@ def vc_single(
     input_audio_path,
     input_upload_audio,
     vocal_audio,
-    tts_text,
-    tts_voice,
     f0_up_key,
     f0_file,
     f0_method,
@@ -126,38 +125,39 @@ def vc_single(
     resample_sr,
     rms_mix_rate,
     protect
-):  # spk_item, input_audio0, vc_transform0,f0_file,f0method0
-    global tgt_sr, net_g, vc, hubert_model, version, cpt
+):
+    global n_spk, tgt_sr, net_g, vc, cpt, version, weights_index  # Explicitly declare global variables
     try:
         logs = []
         print(f"Converting...")
         logs.append(f"Converting...")
         yield "\n".join(logs), None
-        if vc_audio_mode == "Input path" or "Youtube" and input_audio_path != "":
-            audio, sr = librosa.load(input_audio_path, sr=16000, mono=True)
-        elif vc_audio_mode == "Upload audio":
-            selected_audio = input_upload_audio
-            if vocal_audio:
-                selected_audio = vocal_audio
-            elif input_upload_audio:
-                selected_audio = input_upload_audio
-            sampling_rate, audio = selected_audio
-            duration = audio.shape[0] / sampling_rate
-            audio = (audio / np.iinfo(audio.dtype).max).astype(np.float32)
-            if len(audio.shape) > 1:
-                audio = librosa.to_mono(audio.transpose(1, 0))
-            if sampling_rate != 16000:
-                audio = librosa.resample(audio, orig_sr=sampling_rate, target_sr=16000)
-        elif vc_audio_mode == "TTS Audio":
-            if tts_text is None or tts_voice is None:
-                return "You need to enter text and select a voice", None
-            asyncio.run(edge_tts.Communicate(tts_text, "-".join(tts_voice.split('-')[:-1])).save("tts.mp3"))
-            audio, sr = librosa.load("tts.mp3", sr=16000, mono=True)
-            input_audio_path = "tts.mp3"
-        f0_up_key = int(f0_up_key)
+
+        selected_audio = input_upload_audio
+        if vocal_audio:
+            selected_audio = vocal_audio
+        
+        sampling_rate, audio = selected_audio
+        duration = audio.shape[0] / sampling_rate
+        audio = (audio / np.iinfo(audio.dtype).max).astype(np.float32)
+        
+        if len(audio.shape) > 1:
+            audio = librosa.to_mono(audio.transpose(1, 0))
+        
+        if sampling_rate != 16000:
+            audio = librosa.resample(audio, orig_sr=sampling_rate, target_sr=16000)
+
+        transpose_map = {
+            "No Change": 0,
+            "Male to Female": 12,
+            "Female to Male": -12,
+        }
+        f0_up_key = transpose_map.get(f0_up_key, 0)
         times = [0, 0, 0]
+        
         if hubert_model == None:
             load_hubert()
+        
         if_f0 = cpt.get("f0", 1)
         audio_opt = vc.pipeline(
             hubert_model,
@@ -169,19 +169,20 @@ def vc_single(
             f0_up_key,
             f0_method,
             file_index,
-            # file_big_npy,
             index_rate,
             if_f0,
             filter_radius,
-            tgt_sr,
+            tgt_sr,  # Use the global tgt_sr 
             resample_sr,
             rms_mix_rate,
             version,
             protect,
             f0_file=f0_file
         )
+        
         if resample_sr >= 16000 and tgt_sr != resample_sr:
             tgt_sr = resample_sr
+        
         index_info = (
             "Using index:%s." % file_index
             if os.path.exists(file_index)
@@ -196,7 +197,7 @@ def vc_single(
         info = f"{index_info}\n[{datetime.now().strftime('%Y-%m-%d %H:%M')}]: npy: {times[0]}, f0: {times[1]}s, infer: {times[2]}s"
         logs.append(info)
         yield "\n".join(logs), (tgt_sr, audio_opt)
-    except:
+    except Exception as e:
         info = traceback.format_exc()
         print(info)
         logs.append(info)
@@ -240,8 +241,8 @@ def get_vc(sid, to_return_protect0):
             gr.Markdown.update(value="# <center> No model selected")
         )
     print(f"Loading {sid} model...")
-    selected_model = sid[:-4]
-    cpt = torch.load(os.path.join(weight_root, sid), map_location="cpu")
+    original_name = f"{sid.replace(' ', '_').lower()}.pth"  # Lowercase file matching the original filename format
+    cpt = torch.load(os.path.join(weight_root, original_name), map_location="cpu")
     tgt_sr = cpt["config"][-1]
     cpt["config"][-3] = cpt["weight"]["emb_g.weight"].shape[0]
     if_f0 = cpt.get("f0", 1)
@@ -287,7 +288,7 @@ def get_vc(sid, to_return_protect0):
     else:
         selected_index = gr.Dropdown.update(value=weights_index[0])
     for index, model_index in enumerate(weights_index):
-        if selected_model in model_index:
+        if sid.replace(' ', '_') in model_index:  # Use `sid` after reversing its transformation
             selected_index = gr.Dropdown.update(value=weights_index[index])
             break
     return (
@@ -334,7 +335,16 @@ def vc_multi(
             for index, file in enumerate(audio_files, start=1):
                 audio, sr = librosa.load(os.path.join(folder_path, file), sr=16000, mono=True)
                 input_audio_path = folder_path, file
-                f0_up_key = int(vc_transform0)
+
+                # Dropdown mapping logic
+                selected_transpose = vc_transform0  # This comes from the Gradio dropdown
+                if selected_transpose == "Male to Female":
+                    f0_up_key = 12  # Increase pitch by 12 semitones
+                elif selected_transpose == "Female to Male":
+                    f0_up_key = -12  # Decrease pitch by 12 semitones
+                else:
+                    f0_up_key = 0  # Default (no change)
+
                 times = [0, 0, 0]
                 if hubert_model == None:
                     load_hubert()
@@ -346,7 +356,7 @@ def vc_multi(
                     audio,
                     input_audio_path,
                     times,
-                    f0_up_key,
+                    f0_up_key,  # Pass the mapped f0_up_key value here
                     f0method0,
                     file_index,
                     index_rate,
@@ -381,30 +391,6 @@ def vc_multi(
         logs.append(info)
         yield "\n".join(logs)
 
-def download_audio(url, audio_provider):
-    logs = []
-    os.makedirs("dl_audio", exist_ok=True)
-    if url == "":
-        logs.append("URL required!")
-        yield None, "\n".join(logs)
-        return None, "\n".join(logs)
-    if audio_provider == "Youtube":
-        logs.append("Downloading the audio...")
-        yield None, "\n".join(logs)
-        ydl_opts = {
-            'noplaylist': True,
-            'format': 'bestaudio/best',
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'wav',
-            }],
-            "outtmpl": 'result/dl_audio/audio',
-        }
-        audio_path = "result/dl_audio/audio.wav"
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
-        logs.append("Download Complete.")
-        yield audio_path, "\n".join(logs)
 
 def cut_vocal_and_inst_yt(split_model):
     logs = []
@@ -526,44 +512,11 @@ def use_microphone(microphone):
         return gr.Audio.update(source="upload")
 
 def change_audio_mode(vc_audio_mode):
-    if vc_audio_mode == "Input path":
-        return (
-            # Input & Upload
-            gr.Textbox.update(visible=True),
-            gr.Checkbox.update(visible=False),
-            gr.Audio.update(visible=False),
-            # Youtube
-            gr.Dropdown.update(visible=False),
-            gr.Textbox.update(visible=False),
-            gr.Textbox.update(visible=False),
-            gr.Button.update(visible=False),
-            # Splitter
-            gr.Dropdown.update(visible=True),
-            gr.Textbox.update(visible=True),
-            gr.Button.update(visible=True),
-            gr.Button.update(visible=False),
-            gr.Audio.update(visible=False),
-            gr.Audio.update(visible=True),
-            gr.Audio.update(visible=True),
-            gr.Slider.update(visible=True),
-            gr.Slider.update(visible=True),
-            gr.Audio.update(visible=True),
-            gr.Button.update(visible=True),
-            # TTS
-            gr.Textbox.update(visible=False),
-            gr.Dropdown.update(visible=False)
-        )
-    if vc_audio_mode == "Upload audio":
         return (
             # Input & Upload
             gr.Textbox.update(visible=False),
             gr.Checkbox.update(visible=True),
             gr.Audio.update(visible=True),
-            # Youtube
-            gr.Dropdown.update(visible=False),
-            gr.Textbox.update(visible=False),
-            gr.Textbox.update(visible=False),
-            gr.Button.update(visible=False),
             # Splitter
             gr.Dropdown.update(visible=True),
             gr.Textbox.update(visible=True),
@@ -576,356 +529,310 @@ def change_audio_mode(vc_audio_mode):
             gr.Slider.update(visible=True),
             gr.Audio.update(visible=True),
             gr.Button.update(visible=True),
-            # TTS
-            gr.Textbox.update(visible=False),
-            gr.Dropdown.update(visible=False)
         )
-    elif vc_audio_mode == "Youtube":
-        return (
-            # Input & Upload
-            gr.Textbox.update(visible=False),
-            gr.Checkbox.update(visible=False),
-            gr.Audio.update(visible=False),
-            # Youtube
-            gr.Dropdown.update(visible=True),
-            gr.Textbox.update(visible=True),
-            gr.Textbox.update(visible=True),
-            gr.Button.update(visible=True),
-            # Splitter
-            gr.Dropdown.update(visible=True),
-            gr.Textbox.update(visible=True),
-            gr.Button.update(visible=True),
-            gr.Button.update(visible=False),
-            gr.Audio.update(visible=True),
-            gr.Audio.update(visible=True),
-            gr.Audio.update(visible=True),
-            gr.Slider.update(visible=True),
-            gr.Slider.update(visible=True),
-            gr.Audio.update(visible=True),
-            gr.Button.update(visible=True),
-            # TTS
-            gr.Textbox.update(visible=False),
-            gr.Dropdown.update(visible=False)
-        )
-    elif vc_audio_mode == "TTS Audio":
-        return (
-            # Input & Upload
-            gr.Textbox.update(visible=False),
-            gr.Checkbox.update(visible=False),
-            gr.Audio.update(visible=False),
-            # Youtube
-            gr.Dropdown.update(visible=False),
-            gr.Textbox.update(visible=False),
-            gr.Textbox.update(visible=False),
-            gr.Button.update(visible=False),
-            # Splitter
-            gr.Dropdown.update(visible=False),
-            gr.Textbox.update(visible=False),
-            gr.Button.update(visible=False),
-            gr.Button.update(visible=False),
-            gr.Audio.update(visible=False),
-            gr.Audio.update(visible=False),
-            gr.Audio.update(visible=False),
-            gr.Slider.update(visible=False),
-            gr.Slider.update(visible=False),
-            gr.Audio.update(visible=False),
-            gr.Button.update(visible=False),
-            # TTS
-            gr.Textbox.update(visible=True),
-            gr.Dropdown.update(visible=True)
-        ) 
-def open_ngrok_link():
-    try:
-        with open("/content/drive/MyDrive/vcclient/ngrok_url.txt", "r") as f:
-            ngrok_url = f.read().strip()
-        return ngrok_url
-    except FileNotFoundError:
-        return "Ngrok URL not found. Make sure the server is running."
+female_models = [weights_model[0], weights_model[2]]  # 1st and 3rd models for males
+male_models = [weights_model[1], weights_model[3]]
 
+def update_model_list(gender):
+    if gender == "Male":
+        return gr.Dropdown.update(choices=male_models, value=male_models[0] if male_models else None)
+    elif gender == "Female":
+        return gr.Dropdown.update(choices=female_models, value=female_models[0] if female_models else None)
+    return gr.Dropdown.update(choices=[], value=None)
 
-def get_and_open_link():
-    link = open_ngrok_link()
-    if link.startswith("http"):
-        # Return the link in Markdown format to make it clickable
-        return f"[Click here to open Ngrok link]({link})"
-    else:
-        return "Invalid URL"
+with gr.Blocks(theme="soft", css="""
+    input[type="checkbox"].svelte-1ojmf70 {
+        /* Override the accent color */
+        accent-color: rgb(164, 192, 76) !important;
 
+        /* Add fallback for browsers that don't support accent-color */
+        background-color: rgb(164, 192, 76) !important;
+        border: 2px solid rgb(164, 192, 76) !important;
+    }
 
-# Inference function for Gradio
-def clone_voice(text, audio_file):
-    # Load model configuration and checkpoint
-    config_path = "/content/drive/MyDrive/coqui_XTTSv2/XTTS_ft_colab/config.json"
-    checkpoint_dir = "/content/drive/MyDrive/coqui_XTTSv2/XTTS_ft_colab/"
-
-    config = XttsConfig()
-    config.load_json(config_path)
-    model = Xtts.init_from_config(config)
-    model.load_checkpoint(config, checkpoint_dir=checkpoint_dir, use_deepspeed=False)
-    model.cuda()
-    # Process the uploaded audio to extract speaker latent representation
-    gpt_cond_latent, speaker_embedding = model.get_conditioning_latents(audio_path=[audio_file])
-
-    # Perform inference to generate the cloned voice output
-    output = model.inference(
-        text,
-        "ar",  # Arabic language code
-        gpt_cond_latent,
-        speaker_embedding,
-        temperature=0.7,  # Adjust temperature as needed
-    )
-
-    # Save the generated audio
-    generated_audio_path = "generated_voice.wav"
-    torchaudio.save(generated_audio_path, torch.tensor(output["wav"]).unsqueeze(0), 24000)
-
-    return generated_audio_path
-
-
-
-with gr.Blocks() as app:
-    gr.Markdown("# <center> Advanced RVC Inference\n")
+    .gradio-loader {
+        display: inline-block;
+        border: 4px solid rgba(164, 192, 76, 0.2) !important; /* Light outer color */
+        border-top: 4px solid rgb(164, 192, 76) !important; /* Main spinning color */
+        border-radius: 50% !important; /* Keep the spinner circular */
+        animation: spin 1s linear infinite !important; /* Spinning animation */
+    }
     
+    input[type="checkbox"].svelte-1ojmf70:checked {
+        /* Style for checked state */
+        background-color: rgb(164, 192, 76) !important;
+        border: 2px solid rgb(164, 192, 76) !important;
+    }
+    div#component-20 div[data-testid="block-label"] {
+        color: black !important; /* Force black text */
+        font-weight: italic !important; /* Make the text italic */
+        background-color: rgb(164, 192, 76) !important; /* Set the background color */
+        padding: 10px !important; /* Add some spacing */
+        border: none !important; /* Remove any border */
+        box-shadow: 0 0 10px rgb(164, 192, 76) !important; /* Apply the shadow effect */
+    }
+    div[data-testid="block-label"].float {
+        color: black !important; /* Force black text for upload audio*/
+        font-weight: italic !important; /* Make the text italic */
+        background-color: rgb(164, 192, 76) !important; /* Remove any background */
+        padding: 10px !important; /* Add some spacing */
+        border: none !important; /* Remove any border */
+        box-shadow: 0 0 10px rgb(164, 192, 76) !important; /* Apply the shadow effect */
+    }
+    div#component-44 .svelte-1mwvhlq {
+        color: black !important; /* Force black text for output audio */
+        font-weight: italic !important; /* Make the text italic */
+        background-color: rgb(164, 192, 76) !important; /* Remove any background */
+        padding: none !important; /* Add some spacing */
+        border: none !important; /* Remove any border */
+        box-shadow: 0 0 10px rgb(164, 192, 76) !important; /* Add the shadow effect */
+    }
+    input.svelte-1p9xokt {
+        accent-color: black !important; /* Change the color of the radio button */
+        border: black !important; /* Remove the border */
+        outline: none !important; /* Remove the outline */
+        background-color: transparent !important; /* Remove any background color */
+    }
+    div.wrap.svelte-1ck5uk8 {
+        color: black !important; /* Force black text */
+        font-weight: italic !important; /* Make the text bold */
+        background-color: none !important; /* Remove any background */
+        padding: 10px !important; /* Add some spacing if needed */
+        border: none !important; /* Remove any border */
+        box-shadow: rgb(164,192,76) !important; /* Remove any shadow */
+    }
+    span[data-testid="block-info"] {
+        color: black !important;
+        background-color: rgb(164,192,76) !important;
+        text-shadow: none !important;
+        font-weight: normal !important;
+        padding: 10px 20px !important;
+        margin: 0 !important,
+        display: inline !important;
+    }
+    .section-label, .gr-box label {
+        font-weight: bold !important;
+        color: black !important;
+        background-color: rgb(164,192,76) !important; /* Matches button color */
+        padding: 5px 10px; /* Optional: Adjust padding to match button spacing */
+        border-radius: 8px; /* Optional: Same rounded corners as the button */
+        }
+    .gr-button {
+        background-color: rgb(164,192,76) !important;
+        color: black !important;
+        font-weight: bold !important;
+        border-radius: 8px !important;
+        padding: 10px 20px !important;
+        border: none !important;
+        transition: background-color 0.3s ease, transform 0.2s ease !important;
+    }
+
+    .gr-button:hover {
+        background-color: #8CA63C !important; /* A slightly darker shade for hover effect */
+        transform: scale(1.05) !important;
+    }
+""") as app:
+    gr.Markdown("# <center>🎙️ Real-Time Voice Conversion")
     
-    
-    with gr.TabItem("RVC inference"):
-        with gr.Row():
-          sid = gr.Dropdown(
-              label="Weight",
-              choices=sorted(weights_model),
-          )
-          file_index = gr.Dropdown(
-              label="List of index file",
-              choices=sorted(weights_index),
-              interactive=True,
-          )
-          spk_item = gr.Slider(
-              minimum=0,
-              maximum=2333,
-              step=1,
-              label="Speaker ID",
-              value=0,
-              visible=False,
-              interactive=True,
-          )
-          refresh_model = gr.Button("Refresh model list", variant="primary")
-          clean_button = gr.Button("Clear Model from memory", variant="primary")
-          refresh_model.click(
-              fn=check_models, inputs=[], outputs=[sid, file_index]
-          )
-          clean_button.click(fn=clean, inputs=[], outputs=[sid, spk_item])
-        selected_model = gr.Markdown(value="# <center> No model selected")
-        
-        with gr.Row():
-            with gr.Column():
-                vc_audio_mode = gr.Dropdown(label="Input voice", choices=["Input path", "Upload audio", "Youtube", "TTS Audio"], allow_custom_value=False, value="Upload audio")
-                
-                # Input
-                vc_input = gr.Textbox(label="Input audio path", visible=False)
-                
-                # Upload
-                vc_microphone_mode = gr.Checkbox(label="Use Microphone", value=False, visible=True, interactive=True)
-                vc_upload = gr.Audio(label="Upload audio file", source="upload", visible=True, interactive=True)
-                
-                # Youtube
-                vc_download_audio = gr.Dropdown(label="Provider", choices=["Youtube"], allow_custom_value=False, visible=False, value="Youtube", info="Select provider (Default: Youtube)")
-                vc_link = gr.Textbox(label="Youtube URL", visible=False, info="Example: https://www.youtube.com/watch?v=Nc0sB1Bmf-A", placeholder="https://www.youtube.com/watch?v=...")
-                vc_log_yt = gr.Textbox(label="Output Information", visible=False, interactive=False)
-                vc_download_button = gr.Button("Download Audio", variant="primary", visible=False)
-                vc_audio_preview = gr.Audio(label="Downloaded Audio Preview", visible=False)
-                
-                # TTS
-                tts_text = gr.Textbox(label="TTS text", info="Text to speech input", visible=False)
-                tts_voice = gr.Dropdown(label="Edge-tts speaker", choices=voices, visible=False, allow_custom_value=False, value="en-US-AnaNeural-Female")
-                
-                # Splitter
-                vc_split_model = gr.Dropdown(label="Splitter Model", choices=["hdemucs_mmi", "htdemucs", "htdemucs_ft", "mdx", "mdx_q", "mdx_extra_q"], allow_custom_value=False, visible=False, value="htdemucs", info="Select the splitter model (Default: htdemucs)")
-                vc_split_log = gr.Textbox(label="Output Information", visible=False, interactive=False)
-                vc_split = gr.Button("Split Audio", variant="primary", visible=False)
-                vc_vocal_preview = gr.Audio(label="Vocal Preview", interactive=False, visible=False)
-                vc_inst_preview = gr.Audio(label="Instrumental Preview", interactive=False, visible=False)
+    with gr.Tabs():
+        with gr.TabItem("Voice Conversion"):
+            with gr.Column(scale=1, min_width=300):
+                gr.Markdown("## 👤 Voice Selection")
+                        
+                gender_select = gr.Dropdown(
+                label="Your Gender",
+                choices=["Male", "Female"],
+                value=None,
+                interactive=True,
+                elem_classes=['gr-dropdown']
+                )
+
+                sid = gr.Dropdown(
+                label="Character Voice",
+                choices=[],
+                elem_classes=['gr-dropdown']
+                )
+                        
+                gender_select.change(
+                fn=update_model_list,
+                inputs=[gender_select],
+                outputs=[sid]
+                )
+
+                file_index = gr.Dropdown(
+                label="List of index file",
+                choices=sorted(weights_index),
+                interactive=True,
+                visible=False,  # Always hidden
+                )
+                spk_item = gr.Slider(
+                minimum=0,
+                maximum=2333,
+                step=1,
+                label="Speaker ID",
+                value=0,
+                visible=False,
+                interactive=True,
+                )
+                refresh_model = gr.Button("Refresh model list", variant="primary",visible=False)
+                clean_button = gr.Button("Clear Model from memory", variant="primary",visible=False)
+                refresh_model.click(
+                    fn=check_models, inputs=[], outputs=[sid, file_index],
+                )
+                clean_button.click(fn=clean, inputs=[], outputs=[sid, spk_item])
+                selected_model = gr.Markdown(value="# <center> No model selected", visible=False)
             
-            with gr.Column():
-                vc_transform0 = gr.Number(
-                    label="Transpose", 
-                    info='Type "12" to change from male to female conversion or "-12" for female to male conversion.',
-                    value=0
-                )
-                f0method0 = gr.Radio(
-                    label="Pitch extraction algorithm",
-                    info=f0method_info,
-                    choices=f0method_mode,
-                    value="pm",
-                    interactive=True,
-                )
-                index_rate0 = gr.Slider(
-                    minimum=0,
-                    maximum=1,
-                    label="Retrieval feature ratio",
-                    value=0.7,
-                    interactive=True,
-                    visible=False
-                )
-                filter_radius0 = gr.Slider(
-                    minimum=0,
-                    maximum=7,
-                    label="Apply Median Filtering",
-                    info="Reduces breathiness. Value represents the filter radius.",
-                    value=3,
-                    step=1,
-                    interactive=True,
-                    visible=False
-                )
-                resample_sr0 = gr.Slider(
-                    minimum=0,
-                    maximum=48000,
-                    label="Resample the output audio",
-                    info="Resample the output audio. Set to 0 for no resampling",
-                    value=0,
-                    step=1,
-                    interactive=True,
-                    visible=False
-                )
-                rms_mix_rate0 = gr.Slider(
-                    minimum=0,
-                    maximum=1,
-                    label="Volume Envelope",
-                    info="Mix input and output volume envelopes. Closer to 1 favors the output envelope.",
-                    value=1,
-                    interactive=True,
-                    visible=False
-                )
-                protect0 = gr.Slider(
-                    minimum=0,
-                    maximum=0.5,
-                    label="Voice Protection",
-                    info="Protect voiceless consonants to avoid artifacts. Set to 0.5 to disable.",
-                    value=0.5,
-                    step=0.01,
-                    interactive=True,
-                    visible=False
-                )
-                f0_file0 = gr.File(
-                    label="F0 curve file (Optional)",
-                    info="Replace default F0 and pitch modulation.",
-                    visible=False
-                )
+            with gr.Row():
+                with gr.Column(scale=2, min_width=500):
+                    gr.Markdown("## 🎵 Audio Input", elem_classes=['text-xl', 'mb-3'])
+                    vc_audio_mode = gr.Textbox(visible=False, value="Upload audio")
+                    
+                    # Input
+                    vc_input = gr.Textbox(label="Input audio path", visible=False)
+                    
+                    # Upload
+                    vc_microphone_mode = gr.Checkbox(label="Use Microphone", value=False, visible=True, interactive=True)
+                    vc_upload = gr.Audio(label="Upload audio file", source="upload", visible=True, interactive=True, elem_classes=['gr-box'])
+                    
+                    # Splitter
+                    vc_split_model = gr.Dropdown(label="Splitter Model", choices=["hdemucs_mmi", "htdemucs", "htdemucs_ft", "mdx", "mdx_q", "mdx_extra_q"], allow_custom_value=False, visible=False, value="htdemucs", info="Select the splitter model (Default: htdemucs)")
+                    vc_split_log = gr.Textbox(label="Output Information", visible=False, interactive=False)
+                    vc_split = gr.Button("Split Audio", variant="primary", visible=False)
+                    vc_vocal_preview = gr.Audio(label="Vocal Preview", interactive=False, visible=False)
+                    vc_inst_preview = gr.Audio(label="Instrumental Preview", interactive=False, visible=False)
+                
+                with gr.Column():
+                    gr.Markdown("## 🔧 Voice Conversion Settings", elem_classes=['text-xl', 'mb-3'])
+                    vc_transform0 = gr.Radio(
+                        label="Transpose",
+                        choices=["No Change", "Male to Female", "Female to Male"],
+                        value="No Change",
+                        info="Select the pitch shift type. 'Male to Female' or 'Female to Male'.",
+                        visible=False
+                    )
+
+                    f0method0 = gr.Radio(
+                        label="Pitch Extraction Algorithm",
+                        choices=f0method_mode,
+                        value="pm",
+                        info=f0method_info,
+                        elem_classes=['gr-box']
+                    )
+                    vc_convert = gr.Button("Convert Voice", variant="primary", elem_classes=['gr-button'])
+                    index_rate0 = gr.Slider(
+                        minimum=0, maximum=1,
+                        label="Retrieval Feature Ratio",
+                        value=0.7,
+                        elem_classes=['gr-box'],
+                        visible=False
+                    )
+                    filter_radius0 = gr.Slider(
+                        minimum=0,
+                        maximum=7,
+                        label="Apply Median Filtering",
+                        info="Reduces breathiness. Value represents the filter radius.",
+                        value=3,
+                        step=1,
+                        interactive=True,
+                        visible=False
+                    )
+                    resample_sr0 = gr.Slider(
+                        minimum=0,
+                        maximum=48000,
+                        label="Resample the output audio",
+                        info="Resample the output audio. Set to 0 for no resampling",
+                        value=0,
+                        step=1,
+                        interactive=True,
+                        visible=False
+                    )
+                    rms_mix_rate0 = gr.Slider(
+                        minimum=0,
+                        maximum=1,
+                        label="Volume Envelope",
+                        info="Mix input and output volume envelopes. Closer to 1 favors the output envelope.",
+                        value=1,
+                        interactive=True,
+                        visible=False
+                    )
+                    protect0 = gr.Slider(
+                        minimum=0,
+                        maximum=0.5,
+                        label="Voice Protection",
+                        info="Protect voiceless consonants to avoid artifacts. Set to 0.5 to disable.",
+                        value=0.5,
+                        step=0.01,
+                        interactive=True,
+                        visible=False
+                    )
+                    f0_file0 = gr.File(
+                        label="F0 curve file (Optional)",
+                        info="Replace default F0 and pitch modulation.",
+                        visible=False
+                    )
+            with gr.Row():
+                with gr.Column(scale=2, min_width=500):
+                    vc_log = gr.Textbox(label="Output Information", interactive=False, visible=False)
+                    vc_output = gr.Audio(label="Output Audio", interactive=False)                    
+                    vc_vocal_volume = gr.Slider(
+                        minimum=0,
+                        maximum=10,
+                        label="Vocal volume",
+                        value=1,
+                        interactive=True,
+                        step=1,
+                        info="Adjust vocal volume (Default: 1)",
+                        visible=False
+                    )
+                    vc_inst_volume = gr.Slider(
+                        minimum=0,
+                        maximum=10,
+                        label="Instrument volume",
+                        value=1,
+                        interactive=True,
+                        step=1,
+                        info="Adjust instrument volume (Default: 1)",
+                        visible=False
+                    )
+                    vc_combined_output = gr.Audio(label="Output Combined Audio", visible=False)
+                    vc_combine = gr.Button("Combine", variant="primary", visible=False)
             
-            with gr.Column():
-                vc_log = gr.Textbox(label="Output Information", interactive=False)
-                vc_output = gr.Audio(label="Output Audio", interactive=False)
-                vc_convert = gr.Button("Convert", variant="primary")
-                vc_vocal_volume = gr.Slider(
-                    minimum=0,
-                    maximum=10,
-                    label="Vocal volume",
-                    value=1,
-                    interactive=True,
-                    step=1,
-                    info="Adjust vocal volume (Default: 1)",
-                    visible=False
-                )
-                vc_inst_volume = gr.Slider(
-                    minimum=0,
-                    maximum=10,
-                    label="Instrument volume",
-                    value=1,
-                    interactive=True,
-                    step=1,
-                    info="Adjust instrument volume (Default: 1)",
-                    visible=False
-                )
-                vc_combined_output = gr.Audio(label="Output Combined Audio", visible=False)
-                vc_combine = gr.Button("Combine", variant="primary", visible=False)
-        
-        # Click events
-        vc_convert.click(
-            vc_single,
-            [
-                spk_item,
-                vc_audio_mode,
-                vc_input,
-                vc_upload,
-                vc_vocal_preview,
-                tts_text,
-                tts_voice,
-                vc_transform0,
-                f0_file0,
-                f0method0,
-                file_index,
-                index_rate0,
-                filter_radius0,
-                resample_sr0,
-                rms_mix_rate0,
-                protect0,
-            ],
-            [vc_log, vc_output],
-        )
-        vc_split.click(
-            fn=cut_vocal_and_inst, 
-            inputs=[vc_split_model, vc_upload],
-            outputs=[vc_split_log, vc_vocal_preview, vc_inst_preview]
-        )
-        vc_combine.click(
-            fn=combine_vocal_and_inst,
-            inputs=[vc_output, vc_vocal_volume, vc_inst_volume, vc_split_model],
-            outputs=[vc_combined_output]
-        )
-        vc_microphone_mode.change(
-            fn=use_microphone,
-            inputs=vc_microphone_mode,
-            outputs=vc_upload
-        )
-        vc_audio_mode.change(
-            fn=change_audio_mode,
-            inputs=[vc_audio_mode],
-            outputs=[
-                vc_input,
-                vc_microphone_mode,
-                vc_upload,
-                vc_download_audio,
-                vc_link,
-                vc_log_yt,
-                vc_download_button,
-                vc_split_model,
-                vc_split_log,
-                vc_split,
-                vc_audio_preview,
-                vc_vocal_preview,
-                vc_inst_preview,
-                vc_vocal_volume,
-                vc_inst_volume,
-                vc_combined_output,
-                vc_combine,
-                tts_text,
-                tts_voice
-            ]
-        )
-        sid.change(fn=get_vc, inputs=[sid, protect0], outputs=[spk_item, protect0, file_index, selected_model])
-    with gr.TabItem("real-time RVC"):
-      ngrok_button = gr.Button("Get Ngrok Link", variant="primary")
-      ngrok_link_output = gr.Markdown(label="Ngrok Link", visible=True)
-      ngrok_button.click(fn=get_and_open_link, inputs=[], outputs=[ngrok_link_output])
-    with gr.TabItem("Text to speech voice cloning"):
-        gr.Markdown("# <center> Coqui XTTS Voice Cloning\n")
-        
-        # Input fields
-        text_input = gr.Textbox(label="Text to convert to speech", placeholder="Enter the text here")
-        audio_upload = gr.Audio(label="Upload an audio file", source="upload", type="filepath")
-        
-        # Output field
-        output_audio = gr.Audio(label="Generated Cloned Voice")
-        
-        # Button to trigger inference
-        submit_button = gr.Button("Generate Cloned Voice")
-        
-        # Click event to call clone_voice function
-        submit_button.click(
-            fn=clone_voice,
-            inputs=[text_input, audio_upload],
-            outputs=[output_audio]
-        )
-
-
+            # Click events
+            vc_convert.click(
+                vc_single,
+                [
+                    spk_item,
+                    vc_audio_mode,
+                    vc_input,
+                    vc_upload,
+                    vc_vocal_preview,
+                    vc_transform0,
+                    f0_file0,
+                    f0method0,
+                    file_index,
+                    index_rate0,
+                    filter_radius0,
+                    resample_sr0,
+                    rms_mix_rate0,
+                    protect0,
+                ],
+                [vc_log, vc_output],
+            )
+            vc_split.click(
+                fn=cut_vocal_and_inst, 
+                inputs=[vc_split_model, vc_upload],
+                outputs=[vc_split_log, vc_vocal_preview, vc_inst_preview]
+            )
+            vc_combine.click(
+                fn=combine_vocal_and_inst,
+                inputs=[vc_output, vc_vocal_volume, vc_inst_volume, vc_split_model],
+                outputs=[vc_combined_output]
+            )
+            vc_microphone_mode.change(
+                fn=use_microphone,
+                inputs=vc_microphone_mode,
+                outputs=vc_upload
+            )
+            sid.change(fn=get_vc, inputs=[sid, protect0], outputs=[spk_item, protect0, file_index, selected_model])
 
 app.queue(concurrency_count=1, max_size=50).launch(share=True)
